@@ -1,0 +1,33 @@
+# =========================================================
+# STAGE 1: Build the WAR using Maven
+# =========================================================
+FROM maven:3.9-eclipse-temurin-17 AS builder
+
+WORKDIR /app
+
+# Copy pom.xml first to leverage Docker cache for dependencies
+COPY pom.xml .
+
+# Download dependencies first (faster rebuilds)
+RUN mvn -B -q -e -DskipTests dependency:go-offline
+
+# Now copy the source
+COPY src ./src
+
+# Build WAR
+RUN mvn -B -q clean package -DskipTests
+
+# =========================================================
+# STAGE 2: Run the WAR in Tomcat
+# =========================================================
+FROM tomcat:10.1-jdk17-temurin
+
+# Clean default webapps (optional, keeps image clean)
+RUN rm -rf /usr/local/tomcat/webapps/*
+
+# Copy WAR from builder stage as ROOT.war
+COPY --from=builder /app/target/*.war /usr/local/tomcat/webapps/ROOT.war
+
+EXPOSE 8080
+
+# Tomcat default CMD runs automatically
